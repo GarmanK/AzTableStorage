@@ -60,7 +60,7 @@ function Connect-AzTableStorage {
             client_secret = $ClientSecret
             resource      = $Resource
         }
-    
+        
         $global:AzTableStoragetokenResponse = Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$TenantId/oauth2/token" -Body $body -ContentType "application/x-www-form-urlencoded"
     
         if ($AzTableStoragetokenResponse -and $AzTableStoragetokenResponse.access_token) {
@@ -105,7 +105,7 @@ function Test-AzTableStorageTokenExpiration {
         }
     }
     else {
-        Throw
+        Throw "Token not found. Please authenticate first."
     }
 }
 
@@ -167,8 +167,7 @@ function Add-AzTableStorageRow {
 
         return $response
     } catch {
-        Write-Error "Failed to add row into table storage"
-        throw
+        throw $_
     }
 }
 
@@ -184,7 +183,7 @@ function Merge-AzTableStorageRow {
     # Check if the token is expired and re-authenticate if necessary
     $testresponse = Test-AzTableStorageTokenExpiration
     if ($testresponse -eq 403) {
-        Write-Error "Token expired. Please re-authenticate."
+        Write-Warning "Token expired. Please re-authenticate."
         Throw 403
     }
     # If the token is valid, proceed with the request
@@ -215,8 +214,7 @@ function Merge-AzTableStorageRow {
         return $response
     }
     catch {
-        Write-Error "Failed to merge row into table storage:"
-        throw
+        throw $_
     }
 }
 
@@ -233,7 +231,7 @@ function Get-AzTableStorageRows {
     # Check if the token is expired and re-authenticate if necessary
     $testresponse = Test-AzTableStorageTokenExpiration
     if ($testresponse -eq 403) {
-        Write-Error "Token expired. Please re-authenticate."
+        Write-Warning "Token expired. Please re-authenticate."
         Throw 403
     }
     # If the token is valid, proceed with the request
@@ -278,7 +276,7 @@ function Get-AzTableStorageRows {
     }
     catch {
         write-error "Failed to retrieve row from table storage"
-        throw
+        throw $_
     }
 }
 
@@ -293,7 +291,7 @@ function Remove-AzTableStorageRow {
     # Check if the token is expired and re-authenticate if necessary
     $testresponse = Test-AzTableStorageTokenExpiration
     if ($testresponse -eq 403) {
-        Write-Error "Token expired. Please re-authenticate."
+        Write-Warning "Token expired. Please re-authenticate."
         Throw 403
     }
     # If the token is valid, proceed with the request
@@ -312,8 +310,8 @@ function Remove-AzTableStorageRow {
         Write-Host "Row successfully deleted."
     }
     catch {
-        Write-Error "Failed to delete row from table storage"
-        throw
+        Write-Warning "Failed to delete row from table storage"
+        throw $_
     }
 }
 
