@@ -18,8 +18,12 @@
    Add-AzTableStorageRow -AccountName "your-account-name" -TableName "your-table-name" -PartitionKey "your-partition-key" -RowKey "your-row-key" -Properties @{"Property1"="Value1"; "Property2"="Value2"}
    
  .EXAMPLE
-   Update a new row into a table in Azure Table Storage. This uses the rest API merge method.
+   Merge a row into a table in Azure Table Storage. This uses the rest API merge method.
     Merge-AzTableStorageRow -AccountName "your-account-name" -TableName "your-table-name" -PartitionKey "your-partition-key" -RowKey "your-row-key" -Properties @{"Property1"="Value1"; "Property2"="Value2"}
+
+.EXAMPLE
+   Update a new row into a table in Azure Table Storage. This overwrites the entire row.
+    Update-AzTableStorageRow -AccountName "your-account-name" -TableName "your-table-name" -PartitionKey "your-partition-key" -RowKey "your-row-key" -Properties @{"Property1"="Value1"; "Property2"="Value2"}
 
  .EXAMPLE
     Get rows from a table in Azure Table Storage.
@@ -30,6 +34,16 @@
     $Context = New-AzTableStorageContext -StorageAccountName "your-account-name" -StorageAccountKey "your-storage-account-key"
 #>
 
+#region Examples
+<#
+    #auth process when running locally
+    $TokenExpirationTime = ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds()+3300)
+    Connect-AzAccount
+    # Get Token from Azure Table Storage Entra ID Authorization
+    $aztokendetails = Get-AzAccessToken -ResourceTypeName Storage
+    #Provide the token to the AzTableStorage module
+    connect-AzTableStorage -Token $aztokendetails.Token -TokenExpiration $TokenExpirationTime
+#>
 #Region Auth
 function Connect-AzTableStorage {
     param (
@@ -218,6 +232,53 @@ function Merge-AzTableStorageRow {
     }
 }
 
+#region update row
+function Update-AzTableStorageRow {
+    param (
+        [Parameter(Mandatory = $true)][string]$AccountName,
+        [Parameter(Mandatory = $true)][string]$TableName,
+        [Parameter(Mandatory = $true)][string]$PartitionKey,
+        [Parameter(Mandatory = $true)][string]$RowKey,
+        [Parameter(Mandatory = $true)][hashtable]$Properties
+    )
+    # Check if the token is expired
+    $testresponse = Test-AzTableStorageTokenExpiration
+    if ($testresponse -eq 403) {
+        Write-Warning "Token expired. Please re-authenticate."
+        Throw 403
+    }
+
+    try {
+        $bearerToken = $global:AzTableStoragetokenResponse.access_token
+        $uri         = "https://$AccountName.table.core.windows.net/$TableName(PartitionKey='$PartitionKey',RowKey='$RowKey')"
+        $headers     = @{
+            "Authorization"        = "Bearer $bearerToken"
+            "x-ms-version"         = "2025-05-05"
+            "Accept"               = "application/json;odata=nometadata"
+            "Content-Type"         = "application/json"
+            "DataServiceVersion"   = "3.0"
+            "MaxDataServiceVersion"= "3.0"
+            'x-ms-date'            = [DateTime]::UtcNow.ToString('R')
+            "If-Match"             = "*"
+        }
+
+        $body = @{
+            "PartitionKey" = $PartitionKey
+            "RowKey"       = $RowKey
+        }
+        foreach ($key in $Properties.Keys) {
+            $body[$key] = $Properties[$key]
+        }
+
+        $jsonBody = $body | ConvertTo-Json
+        $response = Invoke-RestMethod -Uri $uri -Method PUT -Headers $headers -Body $jsonBody
+        return $response
+    }
+    catch {
+        throw $_
+    }
+}
+
 #region Get-AzTableStorageRows
 function Get-AzTableStorageRows {
     param(
@@ -257,7 +318,8 @@ function Get-AzTableStorageRows {
         $response = Invoke-RestMethod -Uri $uri -Method GET -Headers $headers
         if ($RowKey -and $PartitionKey) {
             if ($response -and $response.PartitionKey -eq $PartitionKey -and $response.RowKey -eq $RowKey) {
-                return $response
+                $responsejson = $response | ConvertTo-Json -Depth 10
+                return $responsejson | ConvertFrom-Json -AsHashtable
             }
             else {
                 Write-Host "No matching row found."
@@ -270,7 +332,8 @@ function Get-AzTableStorageRows {
                 return $null
             }
             else {
-                return $response.value
+                $responsejson = $response | ConvertTo-Json -Depth 10
+                return $responsejson | ConvertFrom-Json -AsHashtable
             }
         }
     }
@@ -316,4 +379,4 @@ function Remove-AzTableStorageRow {
 }
 
 #Region Export Functions to Module
-Export-ModuleMember -Function Connect-AzTableStorage, Add-AzTableStorageRow, Merge-AzTableStorageRow, Get-AzTableStorageRows, New-AzTableStorageContext, Remove-AzTableStorageRow
+Export-ModuleMember -Function Connect-AzTableStorage, Add-AzTableStorageRow, Merge-AzTableStorageRow, Update-AzTableStorageRow, Get-AzTableStorageRows, New-AzTableStorageContext, Remove-AzTableStorageRow
