@@ -237,9 +237,9 @@ function Update-AzTableStorageRow {
     param (
         [Parameter(Mandatory = $true)][string]$AccountName,
         [Parameter(Mandatory = $true)][string]$TableName,
-        [Parameter(Mandatory = $true)][string]$PartitionKey,
-        [Parameter(Mandatory = $true)][string]$RowKey,
-        [Parameter(Mandatory = $true)][hashtable]$Properties
+        [Parameter(Mandatory = $false)][string]$PartitionKey,
+        [Parameter(Mandatory = $false)][string]$RowKey,
+        [Parameter(Mandatory = $true,ValueFromPipeline=$true)][hashtable]$Properties
     )
     # Check if the token is expired
     $testresponse = Test-AzTableStorageTokenExpiration
@@ -247,6 +247,24 @@ function Update-AzTableStorageRow {
         Write-Warning "Token expired. Please re-authenticate."
         Throw 403
     }
+
+    #use the PartitionKey and RowKey from the Properties if not provided
+    if (!$PartitionKey) {
+        $PartitionKey = $Properties.PartitionKey
+    }
+    #if the partition key is still null, throw an error
+    if (!$PartitionKey) {
+        throw "PartitionKey is required."
+    }
+    #use the RowKey from the Properties if not provided
+    if (!$RowKey) {
+        $RowKey = $Properties.RowKey
+    }
+    #if the row key is still null, throw an error
+    if (!$RowKey) {
+        throw "RowKey is required."
+    }
+
 
     try {
         $bearerToken = $global:AzTableStoragetokenResponse.access_token
