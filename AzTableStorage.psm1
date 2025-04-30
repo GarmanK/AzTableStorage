@@ -319,7 +319,7 @@ function Get-AzTableStorageRows {
         if ($RowKey -and $PartitionKey) {
             if ($response -and $response.PartitionKey -eq $PartitionKey -and $response.RowKey -eq $RowKey) {
                 $responsejson = $response | ConvertTo-Json -Depth 10
-                return $responsejson | ConvertFrom-Json -AsHashtable
+                return $responsejson | ConvertFrom-Json -AsHashtable -Depth 10
             }
             else {
                 Write-Host "No matching row found."
@@ -332,8 +332,7 @@ function Get-AzTableStorageRows {
                 return $null
             }
             else {
-                $responsejson = $response | ConvertTo-Json -Depth 10
-                return $responsejson | ConvertFrom-Json -AsHashtable
+                return $response.value
             }
         }
     }
